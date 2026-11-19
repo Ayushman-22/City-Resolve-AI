@@ -5,7 +5,20 @@ import { analyzeImage, fileToBase64, VisionAnalysis } from '../lib/vision';
 interface Props {
   onAnalysis: (result: VisionAnalysis, previewUrl: string) => void;
 }
-
+async function shrinkFile(file: File, maxSize = 768): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.7));
+    return blob ? new File([blob], 'photo.jpg', { type: 'image/jpeg' }) : file;
+  } catch {
+    return file;
+  }
+}
 export default function ImageAnalyzer({ onAnalysis }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -20,7 +33,8 @@ export default function ImageAnalyzer({ onAnalysis }: Props) {
     const previewUrl = URL.createObjectURL(file);
     setPreview(previewUrl);
     try {
-      const { base64, mimeType } = await fileToBase64(file);
+      const small = await shrinkFile(file);
+      const { base64, mimeType } = await fileToBase64(small);
       const analysis = await analyzeImage(base64, mimeType);
       setResult(analysis);
       setState('done');
@@ -32,11 +46,9 @@ export default function ImageAnalyzer({ onAnalysis }: Props) {
   };
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) analyze(file);
-    e.target.value = '';
-  };
-
+   const file = e.target.files?.[0];
+   if (file) analyze(file);
+    };
   const reset = () => {
     setState('idle');
     setPreview(null);
