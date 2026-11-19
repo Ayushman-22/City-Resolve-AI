@@ -13,23 +13,41 @@ const categoryIcons: Record<string, string> = {
 export default function IssueCard({ issue, onVote }: { issue: Issue; onVote?: () => void }) {
   const [voted, setVoted] = useState(false);
   const [votes, setVotes] = useState(issue.votes);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  // Purane issues mein temporary blob: link save hua tha, wo kahin nahi chalta
+  const hasPhoto = !!issue.image_url && !issue.image_url.startsWith('blob:') && !imgFailed;
 
   const handleVote = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (voted) return;
-    await voteIssue(issue.id);
-    setVotes(v => v + 1);
-    setVoted(true);
-    onVote?.();
+    try {
+      await voteIssue(issue.id);
+      setVotes(v => v + 1);
+      setVoted(true);
+      onVote?.();
+    } catch (err) {
+      console.error('Vote failed:', err);
+    }
   };
 
   return (
     <Link to={`/issues/${issue.id}`} className="block group">
       <div className="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-300 hover:shadow-md transition-all">
         <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-xl flex-shrink-0">
-            {categoryIcons[issue.category] || '📋'}
-          </div>
+          {hasPhoto ? (
+            <img
+              src={issue.image_url}
+              alt=""
+              loading="lazy"
+              onError={() => setImgFailed(true)}
+              className="w-14 h-14 rounded-lg object-cover flex-shrink-0 border border-gray-200"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-xl flex-shrink-0">
+              {categoryIcons[issue.category] || '📋'}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2 mb-2">
               <h3 className="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors line-clamp-1">

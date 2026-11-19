@@ -5,6 +5,9 @@ import { IssueCategory } from '../lib/types';
 import { CheckCircle2, MapPin, Navigation } from 'lucide-react';
 import ImageAnalyzer from '../components/ImageAnalyzer';
 import { VisionAnalysis } from '../lib/vision';
+import { useAuth } from '../context/AuthContext';
+import { uploadIssueImage } from '../lib/uploadImage';
+
 
 const CATEGORIES: { value: IssueCategory; label: string; icon: string }[] = [
   { value: 'roads', label: 'Roads & Footpaths', icon: '🚧' },
@@ -127,6 +130,8 @@ function MiniMap({ onLocationSelect }: { onLocationSelect: (lat: number, lng: nu
 
 export default function ReportIssue() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -146,16 +151,18 @@ export default function ReportIssue() {
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
   // Called when AI finishes analyzing an image
-  const handleAIResult = (result: VisionAnalysis, preview: string) => {
-    setImagePreview(preview);
-    setForm(f => ({
-      ...f,
-      title: result.title || f.title,
-      description: result.description || f.description,
-      location: result.location || f.location,
-      priority: result.severity || f.priority,
-      category: (result.category as IssueCategory) || f.category,
+  const handleAIResult = (result: VisionAnalysis, preview: string, file: File) => {
+   setImagePreview(preview);
+   setPhotoFile(file);
+   setForm(f => ({
+     ...f,
+     title: result.title || f.title,
+     description: result.description || f.description,
+     location: result.location || f.location,
+     priority: result.severity || f.priority,
+     category: (result.category as IssueCategory) || f.category,
     }));
+
   };
 
   const handleMapPin = (lat: number, lng: number, address: string) => {
@@ -165,22 +172,25 @@ export default function ReportIssue() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await createIssue({
-        ...form,
-        status: 'open',
-        votes: 0,
-        department: DEPT_MAP[form.category],
-        image_url: imagePreview || undefined,
-      });
-      setSubmitted(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+   e.preventDefault();
+   setLoading(true);
+   try {
+     let imageUrl: string | undefined;
+     if (photoFile) {
+       const url = await uploadIssueImage(photoFile, user?.id ?? 'anonymous');
+       if (url) imageUrl = url;
+     }
+     await createIssue({
+       ...form,
+       status: 'open',
+       department: DEPT_MAP[form.category],
+       image_url: imageUrl,
+     });
+     setSubmitted(true);
+   } finally {
+     setLoading(false);
+   }
+};
   if (submitted) return (
     <div className="min-h-[70vh] flex items-center justify-center px-4">
       <div className="text-center max-w-md">
@@ -192,11 +202,13 @@ export default function ReportIssue() {
           Your issue has been logged and routed to <strong>{DEPT_MAP[form.category]}</strong>. You'll get email updates as it progresses.
         </p>
         <div className="flex gap-3 justify-center">
-          <button onClick={() => { setSubmitted(false); setForm({ title: '', description: '', category: 'roads', location: '', latitude: undefined, longitude: undefined, reporter_name: '', reporter_email: '', priority: 'medium' }); setImagePreview(null); }}
+          <button onClick={() => { setSubmitted(false); setForm({ title: '', description: '', category: 'roads', location: '', latitude: undefined, longitude: undefined, reporter_name: '', reporter_email: '', priority: 'medium' }); setImagePreview(null);setPhotoFile(null); }}
             className="border border-gray-200 text-gray-700 font-medium px-5 py-2.5 rounded-xl hover:bg-gray-50 transition-colors text-sm">
             Report Another
+          
           </button>
           <button onClick={() => navigate('/issues')}
+          
             className="bg-blue-600 text-white font-medium px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-colors text-sm">
             View All Issues
           </button>

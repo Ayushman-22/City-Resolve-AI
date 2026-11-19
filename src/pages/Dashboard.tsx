@@ -3,32 +3,43 @@ import { getIssues, getStats, getDepartments, updateIssueStatus } from '../lib/a
 import { Issue, StatsOverview, Department } from '../lib/types';
 import StatsCard from '../components/StatsCard';
 import { StatusBadge, PriorityBadge } from '../components/StatusBadge';
-import { AlertTriangle, CheckCircle2, Clock, Layers, TrendingUp, Building2 } from 'lucide-react';
+
+import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Building2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
+  const { role, roleLoading } = useAuth();
+  const canManage = !roleLoading && role === 'department';
+  
+
   const [issues, setIssues] = useState<Issue[]>([]);
   const [stats, setStats] = useState<StatsOverview | null>(null);
   const [depts, setDepts] = useState<Department[]>([]);
-  const [tab, setTab] = useState<'issues'|'departments'>('issues');
+  const [tab, setTab] = useState<'issues' | 'departments'>('issues');
   const [filter, setFilter] = useState('');
 
   useEffect(() => {
-    getIssues().then(setIssues);
-    getStats().then(setStats);
-    getDepartments().then(setDepts);
+    getIssues().then(setIssues).catch((e) => console.error('Issues load failed:', e));
+    getStats().then(setStats).catch((e) => console.error('Stats load failed:', e));
+    getDepartments().then(setDepts).catch((e) => console.error('Departments load failed:', e));
   }, []);
 
   const handleStatusChange = async (id: string, status: string) => {
-    await updateIssueStatus(id, status);
-    setIssues(prev => prev.map(i => i.id === id ? { ...i, status: status as any } : i));
+    try {
+      await updateIssueStatus(id, status);
+      setIssues((prev) => prev.map((i) => (i.id === id ? { ...i, status: status as any } : i)));
+    } catch (e: any) {
+      console.error('Status update failed:', e);
+      alert('Status update failed. You may not have permission for this issue.');
+    }
   };
 
-  const filtered = filter ? issues.filter(i => i.status === filter) : issues;
+  const filtered = filter ? issues.filter((i) => i.status === filter) : issues;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="mb-8">
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-1">Operations Dashboard</h1>
+        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-1">Operations Dashboard </h1>
         <p className="text-gray-500">City-wide issue management and department overview</p>
       </div>
 
@@ -44,11 +55,16 @@ export default function Dashboard() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6 w-fit">
-        {['issues', 'departments'].map(t => (
-          <button key={t} onClick={() => setTab(t as any)}
+        {['issues', 'departments'].map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t as any)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
               tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}>{t}</button>
+            }`}
+          >
+            {t}
+          </button>
         ))}
       </div>
 
@@ -56,11 +72,23 @@ export default function Dashboard() {
         <>
           {/* Filter row */}
           <div className="flex gap-2 mb-4 flex-wrap">
-            {[['', 'All'], ['open', 'Open'], ['in_progress', 'In Progress'], ['resolved', 'Resolved']].map(([v, l]) => (
-              <button key={v} onClick={() => setFilter(v)}
+            {[
+              ['', 'All'],
+              ['open', 'Open'],
+              ['in_progress', 'In Progress'],
+              ['resolved', 'Resolved'],
+            ].map(([v, l]) => (
+              <button
+                key={v}
+                onClick={() => setFilter(v)}
                 className={`text-sm px-3 py-1.5 rounded-lg border transition-all font-medium ${
-                  filter === v ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600 hover:border-blue-300'
-                }`}>{l}</button>
+                  filter === v
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-gray-200 text-gray-600 hover:border-blue-300'
+                }`}
+              >
+                {l}
+              </button>
             ))}
           </div>
 
@@ -70,32 +98,73 @@ export default function Dashboard() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    {['Issue', 'Location', 'Category', 'Priority', 'Status', 'Votes', 'Actions'].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                    {['Issue', 'Location', 'Category', 'Priority', 'Status', 'Votes', 'Actions'].map((h) => (
+                      <th
+                        key={h}
+                        className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+                      >
+                        {h}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filtered.map(issue => (
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">
+                        No issues found.
+                      </td>
+                    </tr>
+                  )}
+                  {filtered.map((issue) => (
                     <tr key={issue.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
-                        <p className="font-medium text-gray-900 max-w-xs truncate">{issue.title}</p>
-                        <p className="text-xs text-gray-400">{issue.department}</p>
+                        <div className="flex items-center gap-3">
+                          {issue.image_url && !issue.image_url.startsWith('blob:') && (
+                            <a
+                              href={issue.image_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex-shrink-0"
+                            >
+                              <img
+                                src={issue.image_url}
+                                alt=""
+                                loading="lazy"
+                                className="w-12 h-12 object-cover rounded-lg border border-gray-200"
+                              />
+                            </a>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-900 max-w-xs truncate">{issue.title}</p>
+                            <p className="text-xs text-gray-400">{issue.department}</p>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{issue.location}</td>
                       <td className="px-4 py-3 capitalize text-gray-600 text-xs">{issue.category}</td>
-                      <td className="px-4 py-3"><PriorityBadge priority={issue.priority} /></td>
-                      <td className="px-4 py-3"><StatusBadge status={issue.status} /></td>
+                      <td className="px-4 py-3">
+                        <PriorityBadge priority={issue.priority} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={issue.status} />
+                      </td>
                       <td className="px-4 py-3 text-gray-700 font-bold">{issue.votes}</td>
                       <td className="px-4 py-3">
-                        <select value={issue.status} onChange={e => handleStatusChange(issue.id, e.target.value)}
-                          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                          <option value="open">Open</option>
-                          <option value="in_progress">In Progress</option>
-                          <option value="resolved">Resolved</option>
-                          <option value="rejected">Rejected</option>
-                        </select>
-                      </td>
+                        {canManage ? (
+                         <select
+      value={issue.status}
+      onChange={e => handleStatusChange(issue.id, e.target.value)}
+      className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <option value="open">Open</option>
+      <option value="in_progress">In Progress</option>
+      <option value="resolved">Resolved</option>
+      <option value="rejected">Rejected</option>
+    </select>
+  ) : (
+    <span className="text-xs text-gray-400">View only</span>
+  )}
+</td>
                     </tr>
                   ))}
                 </tbody>
@@ -107,7 +176,7 @@ export default function Dashboard() {
 
       {tab === 'departments' && (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {depts.map(d => (
+          {depts.map((d) => (
             <div key={d.id} className="bg-white border border-gray-200 rounded-xl p-5">
               <div className="flex items-start gap-3 mb-4">
                 <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">

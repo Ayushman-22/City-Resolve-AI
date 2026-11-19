@@ -3,7 +3,7 @@ import { Camera, Upload, Sparkles, X, CheckCircle2, AlertCircle, Loader2 } from 
 import { analyzeImage, fileToBase64, VisionAnalysis } from '../lib/vision';
 
 interface Props {
-  onAnalysis: (result: VisionAnalysis, previewUrl: string) => void;
+  onAnalysis: (result: VisionAnalysis, previewUrl: string, file: File) => void;
 }
 
 // Badi photo ko pehle hi chhota kar deta hai (phone ki memory aur upload speed ke liye)
@@ -44,7 +44,7 @@ export default function ImageAnalyzer({ onAnalysis }: Props) {
       const analysis = await analyzeImage(base64, mimeType);
       setResult(analysis);
       setState('done');
-      onAnalysis(analysis, previewUrl);
+      onAnalysis(analysis, previewUrl,small);
     } catch (e: any) {
       setError(e.message || 'Analysis failed. Please fill in the details manually.');
       setState('error');
